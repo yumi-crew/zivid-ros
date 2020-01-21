@@ -8,6 +8,8 @@
 
 #include <zivid_camera/visibility_control.h>
 
+#include <zivid_msgs/srv/capture.hpp>
+
 #include <Zivid/Application.h>
 #include <Zivid/Camera.h>
 #include <Zivid/Image.h>
@@ -32,7 +34,20 @@ public:
   ZIVID_CAMERA_PUBLIC
   explicit ZividCamera(const rclcpp::NodeOptions& options);
 
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+  on_configure(const rclcpp_lifecycle::State& state);
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+  on_activate(const rclcpp_lifecycle::State& state);
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+  on_deactivate(const rclcpp_lifecycle::State& state);
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+  on_cleanup(const rclcpp_lifecycle::State& state);
+  rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+  on_shutdown(const rclcpp_lifecycle::State& state);
+
 private:
+  rclcpp::Service<zivid_msgs::srv::Capture>::SharedPtr srv_;
+
   Zivid::Application zivid_;
   Zivid::Camera camera_;
 };

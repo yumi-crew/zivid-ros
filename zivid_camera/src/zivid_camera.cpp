@@ -5,6 +5,47 @@ namespace zivid_camera
 ZividCamera::ZividCamera(const rclcpp::NodeOptions& options) : rclcpp_lifecycle::LifecycleNode("zivid_camera", options)
 {
 }
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
+{
+  camera_ = zivid_.createFileCamera("/home/lars/Downloads/MiscObjects.zdf");
+
+  auto handle_capture = [this](const std::shared_ptr<rmw_request_id_t> request_header,
+                               const std::shared_ptr<zivid_msgs::srv::Capture::Request> request,
+                               std::shared_ptr<zivid_msgs::srv::Capture::Response> response) -> void {
+    (void)request_header;
+    RCLCPP_INFO(this->get_logger(), "Capture");
+  };
+  srv_ = create_service<zivid_msgs::srv::Capture>("capture", handle_capture);
+
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+ZividCamera::on_activate(const rclcpp_lifecycle::State& state)
+{
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+ZividCamera::on_deactivate(const rclcpp_lifecycle::State& state)
+{
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+ZividCamera::on_cleanup(const rclcpp_lifecycle::State& state)
+{
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+ZividCamera::on_shutdown(const rclcpp_lifecycle::State& state)
+{
+  return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
+}
+
 }  // namespace zivid_camera
 
 #include "rclcpp_components/register_node_macro.hpp"
