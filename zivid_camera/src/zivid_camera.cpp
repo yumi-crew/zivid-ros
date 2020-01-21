@@ -16,8 +16,16 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
                                std::shared_ptr<zivid_msgs::srv::Capture::Response> response) -> void {
     (void)request_header;
     RCLCPP_INFO(this->get_logger(), "Capture");
+
+
+    publishFrame(camera_.capture());
+
   };
-  srv_ = create_service<zivid_msgs::srv::Capture>("capture", handle_capture);
+  capture_service_ = create_service<zivid_msgs::srv::Capture>("capture", handle_capture);
+
+
+  auto qos = rclcpp::SystemDefaultsQoS();
+  points_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>("points", qos);
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
@@ -25,6 +33,8 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
 rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 ZividCamera::on_activate(const rclcpp_lifecycle::State& state)
 {
+  points_publisher_->on_activate();
+
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
 
@@ -45,6 +55,15 @@ ZividCamera::on_shutdown(const rclcpp_lifecycle::State& state)
 {
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
+
+void ZividCamera::publishFrame(Zivid::Frame&& frame) 
+{
+
+    const auto header = std_msgs::msg::Header();
+    const auto point_cloud = frame.getPointCloud();
+
+}
+
 
 }  // namespace zivid_camera
 
