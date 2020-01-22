@@ -57,8 +57,6 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
                                const std::shared_ptr<zivid_msgs::srv::Capture::Request> request,
                                std::shared_ptr<zivid_msgs::srv::Capture::Response> response) -> void {
     (void)request_header;
-    RCLCPP_INFO(this->get_logger(), "Capture");
-
     publishFrame(camera_.capture());
   };
   capture_service_ = create_service<zivid_msgs::srv::Capture>("capture", handle_capture);
