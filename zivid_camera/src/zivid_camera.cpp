@@ -1,5 +1,12 @@
 #include <zivid_camera/zivid_camera.h>
 
+#include <Zivid/HDR.h>
+#include <Zivid/Firmware.h>
+#include <Zivid/Frame2D.h>
+#include <Zivid/Settings2D.h>
+#include <Zivid/Version.h>
+#include <Zivid/CaptureAssistant.h>
+
 namespace
 {
 sensor_msgs::msg::PointField createPointField(std::string name, uint32_t offset, uint8_t datatype, uint32_t count)
@@ -46,12 +53,90 @@ namespace zivid_camera
 {
 ZividCamera::ZividCamera(const rclcpp::NodeOptions& options) : rclcpp_lifecycle::LifecycleNode("zivid_camera", options)
 {
+  this->declare_parameter<std::string>("serial_number", "");
+  this->declare_parameter<int>("num_capture_frames", 10);
+  this->declare_parameter<std::string>("frame_id", "zivid_optical_frame");
+  this->declare_parameter<std::string>("file_camera_path", "");
 }
 
 rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
 {
-  camera_ = zivid_.createFileCamera("/home/lars/Downloads/MiscObjects.zdf");
+  RCLCPP_INFO_STREAM(this->get_logger(), "Built towards Zivid API version " << ZIVID_VERSION);
+  RCLCPP_INFO_STREAM(this->get_logger(), "Running with Zivid API version " << Zivid::Version::libraryVersion());
+  if (Zivid::Version::libraryVersion() != ZIVID_VERSION)
+  {
+    throw std::runtime_error("Zivid library mismatch! The running Zivid Core version does not match the "
+                             "version this ROS driver was built towards. Hint: Try to clean and re-build your project "
+                             "from scratch.");
+  }
+
+  std::string serial_number = this->get_parameter("serial_number").as_string();
+  int num_capture_frames = this->get_parameter("num_capture_frames").as_int();
+  frame_id_ = this->get_parameter("frame_id").as_string();
+
+  std::string file_camera_path = this->get_parameter("file_camera_path").as_string();
+  const bool file_camera_mode = !file_camera_path.empty();
+
+  if (file_camera_mode)
+  {
+    RCLCPP_INFO(this->get_logger(), "Creating file camera from file '%s'", file_camera_path.c_str());
+    camera_ = zivid_.createFileCamera(file_camera_path);
+  }
+  else
+  {
+    auto cameras = zivid_.cameras();
+    RCLCPP_INFO_STREAM(this->get_logger(), cameras.size() << " camera(s) found");
+    if (cameras.empty())
+    {
+      throw std::runtime_error("No cameras found. Ensure that the camera is connected to the USB3 port on your PC.");
+    }
+    else if (serial_number.empty())
+    {
+      camera_ = [&]() {
+        RCLCPP_INFO(this->get_logger(), "Selecting first available camera");
+        for (auto& c : cameras)
+        {
+          if (c.state().isAvailable())
+            return c;
+        }
+        throw std::runtime_error("No available cameras found. Is the camera in use by another process?");
+      }();
+    }
+    else
+    {
+      if (serial_number.find(":") == 0)
+      {
+        serial_number = serial_number.substr(1);
+      }
+      camera_ = [&]() {
+        RCLCPP_INFO(this->get_logger(), "Searching for camera with serial number '%s' ...", serial_number.c_str());
+        for (auto& c : cameras)
+        {
+          if (c.serialNumber() == Zivid::SerialNumber(serial_number))
+            return c;
+        }
+        throw std::runtime_error("No camera found with serial number '" + serial_number + "'");
+      }();
+    }
+
+    if (!Zivid::Firmware::isUpToDate(camera_))
+    {
+      RCLCPP_INFO(this->get_logger(), "The camera firmware is not up-to-date, starting update");
+      Zivid::Firmware::update(camera_, [this](double progress, const std::string& state) {
+        RCLCPP_INFO(this->get_logger(), "  [%.0f%%] %s", progress, state.c_str());
+      });
+      RCLCPP_INFO(this->get_logger(), "Firmware update completed");
+    }
+  }
+
+  RCLCPP_INFO_STREAM(this->get_logger(), camera_);
+  if (!file_camera_mode)
+  {
+    RCLCPP_INFO_STREAM(this->get_logger(), "Connecting to camera '" << camera_.serialNumber() << "'");
+    camera_.connect();
+  }
+  RCLCPP_INFO_STREAM(this->get_logger(), "Connected to camera '" << camera_.serialNumber() << "'");
 
   auto handle_capture = [this](const std::shared_ptr<rmw_request_id_t> request_header,
                                const std::shared_ptr<zivid_msgs::srv::Capture::Request> request,
@@ -64,6 +149,7 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
   auto qos = rclcpp::SystemDefaultsQoS();
   points_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>("points", qos);
 
+  RCLCPP_INFO(this->get_logger(), "Zivid camera driver is now ready!");
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
 

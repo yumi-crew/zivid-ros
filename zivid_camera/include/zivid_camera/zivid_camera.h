@@ -58,7 +58,7 @@ private:
   Zivid::Application zivid_;
   Zivid::Camera camera_;
 
-  std::string frame_id_{"zivid_camera_frame"};
+  std::string frame_id_;
 };
 
 }  // namespace zivid_camera
