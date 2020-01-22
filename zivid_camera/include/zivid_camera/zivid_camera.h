@@ -46,18 +46,20 @@ public:
   on_shutdown(const rclcpp_lifecycle::State& state);
 
 private:
-
   void publishFrame(Zivid::Frame&& frame);
 
-  // std_msgs::Header makeHeader();
-  // sensor_msgs::PointCloud2ConstPtr makePointCloud2(const std_msgs::Header& header,
-  //                                                  const Zivid::PointCloud& point_cloud);
+  std_msgs::msg::Header makeHeader();
+  sensor_msgs::msg::PointCloud2::UniquePtr makePointCloud2(const std_msgs::msg::Header& header,
+                                                           const Zivid::PointCloud& point_cloud);
 
-  rclcpp::Service<zivid_msgs::srv::Capture>::SharedPtr capture_service_;
-  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr points_publisher_;
+  rclcpp::Service<zivid_msgs::srv::Capture>::SharedPtr capture_service_{ nullptr };
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr points_publisher_{ nullptr };
 
   Zivid::Application zivid_;
   Zivid::Camera camera_;
+
+  std::string frame_id_{"zivid_camera_frame"};
+  unsigned int header_seq_{0};
 };
 
 }  // namespace zivid_camera
