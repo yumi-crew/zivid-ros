@@ -95,7 +95,6 @@ private:
   rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr points_publisher_;
   image_transport::CameraPublisher color_image_publisher_;
   image_transport::CameraPublisher depth_image_publisher_;
-  // image_transport::ImageTransport image_transport_;
   rclcpp::Node::SharedPtr image_transport_node_;
 
   Zivid::Application zivid_;
