@@ -60,15 +60,6 @@ ZividCamera::ZividCamera(const rclcpp::NodeOptions& options)
   , camera_status_(CameraStatus::Idle)
   , image_transport_node_(rclcpp::Node::make_shared("image_transport_node"))
 {
-  this->declare_parameter<std::string>("serial_number", "");
-  this->declare_parameter<int>("num_capture_frames", 10);
-  this->declare_parameter<std::string>("frame_id", "zivid_optical_frame");
-  this->declare_parameter<std::string>("file_camera_path", "");
-}
-
-rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
-ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
-{
   RCLCPP_INFO_STREAM(this->get_logger(), "Built towards Zivid API version " << ZIVID_VERSION);
   RCLCPP_INFO_STREAM(this->get_logger(), "Running with Zivid API version " << Zivid::Version::libraryVersion());
   if (Zivid::Version::libraryVersion() != ZIVID_VERSION)
@@ -78,6 +69,15 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
                              "from scratch.");
   }
 
+  this->declare_parameter<std::string>("serial_number", "");
+  this->declare_parameter<int>("num_capture_frames", 10);
+  this->declare_parameter<std::string>("frame_id", "zivid_optical_frame");
+  this->declare_parameter<std::string>("file_camera_path", "");
+}
+
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
+ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
+{
   std::string serial_number = this->get_parameter("serial_number").as_string();
   int num_capture_frames = this->get_parameter("num_capture_frames").as_int();
   frame_id_ = this->get_parameter("frame_id").as_string();
