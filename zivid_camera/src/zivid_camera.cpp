@@ -143,6 +143,12 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
              const std::shared_ptr<zivid_interfaces::srv::CameraInfoSerialNumber::Request> request,
              std::shared_ptr<zivid_interfaces::srv::CameraInfoSerialNumber::Response> response) -> void {
         (void)request_header;
+        if (!enabled_)
+        {
+          RCLCPP_WARN(this->get_logger(), "Trying to call the 'camera_info/serial_number' service, but the service is "
+                                          "not activated");
+          return;
+        }
         response->serial_number = camera_.serialNumber().toString();
       });
 
@@ -152,6 +158,12 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
              const std::shared_ptr<zivid_interfaces::srv::CameraInfoModelName::Request> request,
              std::shared_ptr<zivid_interfaces::srv::CameraInfoModelName::Response> response) -> void {
         (void)request_header;
+        if (!enabled_)
+        {
+          RCLCPP_WARN(this->get_logger(), "Trying to call the 'camera_model/model_name' service, but the service is "
+                                          "not activated");
+          return;
+        }
         response->model_name = camera_.modelName();
       });
 
