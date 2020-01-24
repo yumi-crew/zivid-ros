@@ -1,16 +1,12 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(zivid_msgs)
-
-if(NOT WIN32)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -Wextra")
-endif()
+project(zivid_interfaces)
 
 find_package(ament_cmake REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
-rosidl_generate_interfaces(zivid_msgs
+rosidl_generate_interfaces(zivid_interfaces
                            "srv/Capture.srv"
                            "srv/Capture2D.srv"
                            "srv/CaptureAssistantSuggestSettings.srv"

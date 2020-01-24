@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>zivid_msgs</name>
+  <name>zivid_interfaces</name>
   <version>0.0.0</version>
-  <description>Zivid message definitions.</description>
+  <description>Zivid interface definitions.</description>
   <maintainer email="lars.tingelstad@ntnu.no">Lars Tingelstad</maintainer>
   <license>BSD3</license>
 
