@@ -1,3 +1,7 @@
+// Copyright (c) 2020 Norwegian University of Science and Technology
+// Copyright (c) 2019, Zivid AS
+// Use of this source code is governed by the BSD 3-Clause license, see LICENSE
+
 #include <zivid_camera/zivid_camera.h>
 
 #include <Zivid/HDR.h>
@@ -52,14 +56,14 @@ std::string toString(zivid_camera::CameraStatus camera_status)
 namespace zivid_camera
 {
 ZividCamera::ZividCamera(const rclcpp::NodeOptions& options)
-  : rclcpp_lifecycle::LifecycleNode("zivid_camera", options), camera_status_(CameraStatus::Idle)
+  : rclcpp_lifecycle::LifecycleNode("zivid_camera", options)
+  , camera_status_(CameraStatus::Idle)
+  , image_transport_node_(rclcpp::Node::make_shared("image_transport_node"))
 {
   this->declare_parameter<std::string>("serial_number", "");
   this->declare_parameter<int>("num_capture_frames", 10);
   this->declare_parameter<std::string>("frame_id", "zivid_optical_frame");
   this->declare_parameter<std::string>("file_camera_path", "");
-
-  image_transport_node_ = rclcpp::Node::make_shared("image_transport_node");
 }
 
 rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
@@ -79,9 +83,9 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
   frame_id_ = this->get_parameter("frame_id").as_string();
 
   std::string file_camera_path = this->get_parameter("file_camera_path").as_string();
-  const bool file_camera_mode = !file_camera_path.empty();
+  file_camera_mode_ = !file_camera_path.empty();
 
-  if (file_camera_mode)
+  if (file_camera_mode_)
   {
     RCLCPP_INFO(this->get_logger(), "Creating file camera from file '%s'", file_camera_path.c_str());
     camera_ = zivid_.createFileCamera(file_camera_path);
@@ -133,14 +137,6 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
     }
   }
 
-  RCLCPP_INFO_STREAM(this->get_logger(), camera_);
-  if (!file_camera_mode)
-  {
-    RCLCPP_INFO_STREAM(this->get_logger(), "Connecting to camera '" << camera_.serialNumber() << "'");
-    camera_.connect();
-  }
-  RCLCPP_INFO_STREAM(this->get_logger(), "Connected to camera '" << camera_.serialNumber() << "'");
-
   camera_info_serial_number_service_ = this->create_service<zivid_interfaces::srv::CameraInfoSerialNumber>(
       "camera_info/serial_number",
       [this](const std::shared_ptr<rmw_request_id_t> request_header,
@@ -165,6 +161,11 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
              const std::shared_ptr<zivid_interfaces::srv::Capture::Request> request,
              std::shared_ptr<zivid_interfaces::srv::Capture::Response> response) -> void {
         (void)request_header;
+        if (!enabled_)
+        {
+          RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture' service, but the service is not activated");
+          return;
+        }
         publishFrame(camera_.capture());
       });
 
@@ -174,6 +175,12 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
              const std::shared_ptr<zivid_interfaces::srv::Capture2D::Request> request,
              std::shared_ptr<zivid_interfaces::srv::Capture2D::Response> response) -> void {
         (void)request_header;
+
+        if (!enabled_)
+        {
+          RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture_2d' service, but the service is not activated");
+          return;
+        }
 
         Zivid::Settings2D settings2D;
         auto frame2D = camera_.capture2D(settings2D);
@@ -190,14 +197,22 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
 
   points_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>("points", qos);
 
-  RCLCPP_INFO(this->get_logger(), "Zivid camera driver is now ready!");
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
 
 rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 ZividCamera::on_activate(const rclcpp_lifecycle::State& state)
 {
+  RCLCPP_INFO_STREAM(this->get_logger(), camera_);
+  if (!file_camera_mode_)
+  {
+    RCLCPP_INFO_STREAM(this->get_logger(), "Connecting to camera '" << camera_.serialNumber() << "'");
+    camera_.connect();
+  }
+  RCLCPP_INFO_STREAM(this->get_logger(), "Connected to camera '" << camera_.serialNumber() << "'");
+
   points_publisher_->on_activate();
+  enabled_ = true;
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
@@ -205,6 +220,16 @@ ZividCamera::on_activate(const rclcpp_lifecycle::State& state)
 rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 ZividCamera::on_deactivate(const rclcpp_lifecycle::State& state)
 {
+  if (!file_camera_mode_)
+  {
+    RCLCPP_INFO_STREAM(this->get_logger(), "Disconnecting from camera '" << camera_.serialNumber() << "'");
+    camera_.disconnect();
+  }
+  RCLCPP_INFO_STREAM(this->get_logger(), "Disconnected from camera '" << camera_.serialNumber() << "'");
+
+  points_publisher_->on_deactivate();
+  enabled_ = false;
+
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
 

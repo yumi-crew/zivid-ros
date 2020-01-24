@@ -1,3 +1,7 @@
+// Copyright (c) 2020 Norwegian University of Science and Technology
+// Copyright (c) 2019, Zivid AS
+// Use of this source code is governed by the BSD 3-Clause license, see LICENSE
+
 #pragma once
 
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
@@ -36,6 +40,12 @@ enum class CameraStatus
   Disconnected
 };
 
+struct ZividCameraOptions
+{
+  std::string node_name = "zivid_camera";
+  rclcpp::QoS qos_profile = rclcpp::SystemDefaultsQoS();
+};
+
 class ZividCamera : public rclcpp_lifecycle::LifecycleNode
 {
 public:
@@ -57,8 +67,10 @@ private:
   void publishFrame(Zivid::Frame&& frame);
 
   std_msgs::msg::Header makeHeader();
+
   sensor_msgs::msg::PointCloud2::UniquePtr makePointCloud2(const std_msgs::msg::Header& header,
                                                            const Zivid::PointCloud& point_cloud);
+
   sensor_msgs::msg::Image::ConstSharedPtr makeColorImage(const std_msgs::msg::Header& header,
                                                          const Zivid::PointCloud& point_cloud);
   sensor_msgs::msg::Image::ConstSharedPtr makeColorImage(const std_msgs::msg::Header& header,
@@ -89,7 +101,10 @@ private:
   Zivid::Application zivid_;
   Zivid::Camera camera_;
 
+  bool file_camera_mode_{ false };
   std::string frame_id_;
+
+  bool enabled_{false};
 };
 
 }  // namespace zivid_camera
