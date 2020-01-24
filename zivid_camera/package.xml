@@ -20,7 +20,7 @@
   <depend>image_transport</depend>
   <depend>builtin_interfaces</depend>
   <depend>rosidl_default_generators</depend>
-  <depend>zivid_msgs</depend>
+  <depend>zivid_interfaces</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

@@ -27,7 +27,7 @@ find_package(rclcpp_lifecycle REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(image_transport REQUIRED)
-find_package(zivid_msgs REQUIRED)
+find_package(zivid_interfaces REQUIRED)
 
 find_package(Zivid 1.8.0 COMPONENTS Core REQUIRED)
 message(STATUS "Found Zivid version ${Zivid_VERSION}")
@@ -53,7 +53,7 @@ ament_target_dependencies(zivid_camera
                           std_msgs
                           sensor_msgs
                           image_transport
-                          zivid_msgs)
+                          zivid_interfaces)
 rclcpp_components_register_nodes(zivid_camera "zivid_camera::ZividCamera")
 
 # since the package installs libraries without exporting them it needs to make
