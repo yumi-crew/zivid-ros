@@ -202,6 +202,21 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
         color_image_publisher_.publish(makeColorImage(header, image), camera_info);
       });
 
+  capture_assistant_suggest_settings_service_ = create_service<zivid_interfaces::srv::CaptureAssistantSuggestSettings>(
+      "capture_assistant/suggest_settings",
+      [this](const std::shared_ptr<rmw_request_id_t> request_header,
+             const std::shared_ptr<zivid_interfaces::srv::CaptureAssistantSuggestSettings::Request> request,
+             std::shared_ptr<zivid_interfaces::srv::CaptureAssistantSuggestSettings::Response> response) -> void {
+        (void)request_header;
+
+        if (!enabled_)
+        {
+          RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture_assistant/suggest_settings' service, but the "
+                                          "service is not activated");
+          return;
+        }
+      });
+
   auto qos = rclcpp::SystemDefaultsQoS();
 
   color_image_publisher_ = image_transport::create_camera_publisher(image_transport_node_.get(), "color/image_color");
