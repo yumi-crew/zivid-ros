@@ -3,6 +3,8 @@
 // Use of this source code is governed by the BSD 3-Clause license, see LICENSE
 
 #include <zivid_camera/zivid_camera.h>
+#include <zivid_camera/settings_generator.h>
+
 
 #include <Zivid/HDR.h>
 #include <Zivid/Firmware.h>
@@ -73,6 +75,20 @@ ZividCamera::ZividCamera(const rclcpp::NodeOptions& options)
   this->declare_parameter<int>("num_capture_frames", 10);
   this->declare_parameter<std::string>("frame_id", "zivid_optical_frame");
   this->declare_parameter<std::string>("file_camera_path", "");
+  
+
+  const auto settings = Zivid::Settings{};
+  Generator capture_general_gen(this, settings, "CaptureGeneral");
+  Generator capture_frame_gen(this, settings, "CaptureFrame");
+  traverseSettingsTree(settings, capture_general_gen, capture_frame_gen);
+
+  
+
+
+  // rcl_interfaces::msg::ParameterDescriptor parameter_descriptor;
+  // parameter_descriptor.floating_point_range()
+  // this->declare_parameter("blue_balance", settings.blueBalance().value(),
+  //                         this->describe_parameter(settings.blueBalance().description));
 }
 
 rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
