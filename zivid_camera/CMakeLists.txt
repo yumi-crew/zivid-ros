@@ -40,21 +40,37 @@ set(CMAKE_EXE_LINKER_FLAGS
 
 set(LIBRARY_NAME ${PROJECT_NAME})
 
-add_library(zivid_camera SHARED src/zivid_camera.cpp)
-turn_on_compiler_warnings_if_enabled(zivid_camera)
-target_include_directories(zivid_camera PRIVATE include)
+add_library(zivid_camera_library SHARED src/zivid_camera.cpp)
+turn_on_compiler_warnings_if_enabled(zivid_camera_library)
+target_include_directories(zivid_camera_library PRIVATE include)
 target_compile_definitions(
-  zivid_camera PRIVATE
+  zivid_camera_library PRIVATE
   "ZIVID_ROS_DRIVER_VERSION=\"${${PROJECT_NAME}_VERSION}\"")
-target_compile_definitions(zivid_camera PRIVATE "ZIVID_CAMERA_BUILDING_DLL")
-target_link_libraries(zivid_camera Zivid::Core)
-ament_target_dependencies(zivid_camera
+target_compile_definitions(zivid_camera_library PRIVATE
+                           "ZIVID_CAMERA_BUILDING_DLL")
+target_link_libraries(zivid_camera_library Zivid::Core)
+ament_target_dependencies(zivid_camera_library
                           rclcpp_lifecycle
                           std_msgs
                           sensor_msgs
                           image_transport
                           zivid_interfaces)
-rclcpp_components_register_nodes(zivid_camera "zivid_camera::ZividCamera")
+rclcpp_components_register_node(zivid_camera_library
+                                PLUGIN
+                                "zivid_camera::ZividCamera"
+                                EXECUTABLE
+                                "zivid_camera")
+
+add_executable(manual_composition src/manual_composition.cpp)
+turn_on_compiler_warnings_if_enabled(manual_composition)
+target_include_directories(manual_composition PRIVATE include)
+target_link_libraries(manual_composition zivid_camera_library Zivid::Core)
+ament_target_dependencies(manual_composition
+                          rclcpp_lifecycle
+                          std_msgs
+                          sensor_msgs
+                          image_transport
+                          zivid_interfaces)
 
 # since the package installs libraries without exporting them it needs to make
 # sure that the library path is being exported
@@ -63,10 +79,12 @@ if(NOT WIN32)
     "${ament_cmake_package_templates_ENVIRONMENT_HOOK_LIBRARY_PATH}")
 endif()
 
-install(TARGETS zivid_camera
+install(TARGETS zivid_camera_library
         RUNTIME DESTINATION bin
         ARCHIVE DESTINATION lib
         LIBRARY DESTINATION lib)
+
+install(TARGETS manual_composition DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY include/ DESTINATION include)
 

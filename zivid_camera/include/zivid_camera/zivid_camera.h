@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -25,6 +26,8 @@
 #include <Zivid/Application.h>
 #include <Zivid/Camera.h>
 #include <Zivid/Image.h>
+#include <Zivid/Settings.h>
+#include <Zivid/Settings2D.h>
 
 namespace Zivid
 {
@@ -63,6 +66,16 @@ public:
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
   on_shutdown(const rclcpp_lifecycle::State& state);
 
+  const rclcpp::Node::SharedPtr get_parameter_server_node()
+  {
+    return parameter_server_node_;
+  }
+
+  const rclcpp::Node::SharedPtr get_image_transport_node()
+  {
+    return image_transport_node_;
+  }
+
 private:
   void publishFrame(Zivid::Frame&& frame);
 
@@ -97,11 +110,18 @@ private:
   image_transport::CameraPublisher depth_image_publisher_;
   rclcpp::Node::SharedPtr image_transport_node_;
 
+  rclcpp::Node::SharedPtr parameter_server_node_;
+  rclcpp::SyncParametersClient::SharedPtr parameters_client_;
+  rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr parameter_event_subscriber_;
+
   Zivid::Application zivid_;
   Zivid::Camera camera_;
+  Zivid::Settings base_settings_;
 
+  std::string serial_number_{""};
+  int num_capture_frames_{10};
   bool file_camera_mode_{ false };
-  std::string frame_id_;
+  std::string frame_id_{"zivid_optical_frame"};
 
   bool enabled_{false};
 };

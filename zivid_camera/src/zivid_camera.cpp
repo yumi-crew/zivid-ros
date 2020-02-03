@@ -2,9 +2,12 @@
 // Copyright (c) 2019, Zivid AS
 // Use of this source code is governed by the BSD 3-Clause license, see LICENSE
 
+#include <chrono>
+#include <memory>
+#include <sstream>
+
 #include <zivid_camera/zivid_camera.h>
 #include <zivid_camera/settings_generator.h>
-
 
 #include <Zivid/HDR.h>
 #include <Zivid/Firmware.h>
@@ -12,6 +15,8 @@
 #include <Zivid/Settings2D.h>
 #include <Zivid/Version.h>
 #include <Zivid/CaptureAssistant.h>
+
+using namespace std::chrono_literals;
 
 namespace
 {
@@ -57,11 +62,10 @@ std::string toString(zivid_camera::CameraStatus camera_status)
 
 namespace zivid_camera
 {
-ZividCamera::ZividCamera(const rclcpp::NodeOptions& options)
-  : rclcpp_lifecycle::LifecycleNode("zivid_camera", options)
-  , camera_status_(CameraStatus::Idle)
-  , image_transport_node_(rclcpp::Node::make_shared("image_transport_node"))
+ZividCamera::ZividCamera(const rclcpp::NodeOptions& options) : rclcpp_lifecycle::LifecycleNode("zivid_camera", options)
 {
+  setvbuf(stdout, NULL, _IONBF, BUFSIZ);
+
   RCLCPP_INFO_STREAM(this->get_logger(), "Built towards Zivid API version " << ZIVID_VERSION);
   RCLCPP_INFO_STREAM(this->get_logger(), "Running with Zivid API version " << Zivid::Version::libraryVersion());
   if (Zivid::Version::libraryVersion() != ZIVID_VERSION)
@@ -71,34 +75,84 @@ ZividCamera::ZividCamera(const rclcpp::NodeOptions& options)
                              "from scratch.");
   }
 
-  this->declare_parameter<std::string>("serial_number", "");
-  this->declare_parameter<int>("num_capture_frames", 10);
-  this->declare_parameter<std::string>("frame_id", "zivid_optical_frame");
-  this->declare_parameter<std::string>("file_camera_path", "");
-  
+  image_transport_node_ = rclcpp::Node::make_shared("image_transport_node");
+  parameter_server_node_ = rclcpp::Node::make_shared("zivid_parameter_server");
+  parameters_client_ = rclcpp::SyncParametersClient::make_shared(parameter_server_node_);
 
-  const auto settings = Zivid::Settings{};
-  Generator capture_general_gen(this, settings, "CaptureGeneral");
-  Generator capture_frame_gen(this, settings, "CaptureFrame");
-  traverseSettingsTree(settings, capture_general_gen, capture_frame_gen);
+  while (!parameters_client_->wait_for_service(1s))
+  {
+    if (!rclcpp::ok())
+    {
+      RCLCPP_ERROR(parameter_server_node_->get_logger(), "Interrupted while waiting for the service. Exiting.");
+      rclcpp::shutdown();
+    }
+    RCLCPP_INFO(parameter_server_node_->get_logger(), "service not available, waiting again...");
+  }
 
-  
+  auto on_parameter_event_callback = [this](const rcl_interfaces::msg::ParameterEvent::SharedPtr event) -> void {
+    for (auto& changed_parameter : event->changed_parameters)
+    {
+      auto settings = camera_.settings();
+      if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.blue_balance")
+      {
+        double value = changed_parameter.value.double_value;
+        settings.set(Zivid::Settings::BlueBalance(value));
+        camera_.setSettings(settings);
+        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.red_balance")
+      {
+        double value = changed_parameter.value.double_value;
+        settings.set(Zivid::Settings::RedBalance(value));
+        camera_.setSettings(settings);
+        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.contrast.enabled")
+      {
+        bool value = changed_parameter.value.bool_value;
+        settings.set(Zivid::Settings::Filters::Contrast::Enabled(value));
+        camera_.setSettings(settings);
+        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.contrast.threshold")
+      {
+        double value = changed_parameter.value.double_value;
+        settings.set(Zivid::Settings::Filters::Contrast::Threshold(value));
+        camera_.setSettings(settings);
+        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.gaussian.enabled")
+      {
+        bool value = changed_parameter.value.bool_value;
+        settings.set(Zivid::Settings::Filters::Gaussian::Enabled(value));
+        camera_.setSettings(settings);
+        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.gaussian.sigma")
+      {
+        double value = changed_parameter.value.double_value;
+        settings.set(Zivid::Settings::Filters::Gaussian::Sigma(value));
+        camera_.setSettings(settings);
+        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
+      }
+    }
+  };
+  parameter_event_subscriber_ = parameters_client_->on_parameter_event(on_parameter_event_callback);
 
-
-  // rcl_interfaces::msg::ParameterDescriptor parameter_descriptor;
-  // parameter_descriptor.floating_point_range()
-  // this->declare_parameter("blue_balance", settings.blueBalance().value(),
-  //                         this->describe_parameter(settings.blueBalance().description));
+  this->declare_parameter<std::string>("zivid.camera.serial_number", serial_number_);
+  this->declare_parameter<int>("zivid.camera.num_capture_frames", num_capture_frames_);
+  this->declare_parameter<std::string>("zivid.camera.frame_id", frame_id_);
+  this->declare_parameter<std::string>("zivid.camera.file_camera_path", "");
 }
 
 rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
 {
-  std::string serial_number = this->get_parameter("serial_number").as_string();
-  int num_capture_frames = this->get_parameter("num_capture_frames").as_int();
-  frame_id_ = this->get_parameter("frame_id").as_string();
+  serial_number_ = this->get_parameter("zivid.camera.serial_number").as_string();
+  num_capture_frames_ = this->get_parameter("zivid.camera.num_capture_frames").as_int();
+  frame_id_ = this->get_parameter("zivid.camera.frame_id").as_string();
 
-  std::string file_camera_path = this->get_parameter("file_camera_path").as_string();
+  std::string file_camera_path = this->get_parameter("zivid.camera.file_camera_path").as_string();
   file_camera_mode_ = !file_camera_path.empty();
 
   if (file_camera_mode_)
@@ -114,7 +168,7 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
     {
       throw std::runtime_error("No cameras found. Ensure that the camera is connected to the USB3 port on your PC.");
     }
-    else if (serial_number.empty())
+    else if (serial_number_.empty())
     {
       camera_ = [&]() {
         RCLCPP_INFO(this->get_logger(), "Selecting first available camera");
@@ -128,18 +182,18 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
     }
     else
     {
-      if (serial_number.find(":") == 0)
+      if (serial_number_.find(":") == 0)
       {
-        serial_number = serial_number.substr(1);
+        serial_number_ = serial_number_.substr(1);
       }
       camera_ = [&]() {
-        RCLCPP_INFO(this->get_logger(), "Searching for camera with serial number '%s' ...", serial_number.c_str());
+        RCLCPP_INFO(this->get_logger(), "Searching for camera with serial number '%s' ...", serial_number_.c_str());
         for (auto& c : cameras)
         {
-          if (c.serialNumber() == Zivid::SerialNumber(serial_number))
+          if (c.serialNumber() == Zivid::SerialNumber(serial_number_))
             return c;
         }
-        throw std::runtime_error("No camera found with serial number '" + serial_number + "'");
+        throw std::runtime_error("No camera found with serial number '" + serial_number_ + "'");
       }();
     }
 
@@ -152,6 +206,23 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
       RCLCPP_INFO(this->get_logger(), "Firmware update completed");
     }
   }
+
+  // Get current settings
+  Zivid::Settings settings = camera_.settings();
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.blue_balance",
+                                            settings.blueBalance().value());
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.red_balance",
+                                            settings.redBalance().value());
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.contrast.enabled",
+                                            settings.filters().contrast().isEnabled().value());
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.contrast."
+                                                                            "threshold",
+                                            settings.filters().contrast().threshold().value());
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.gaussian.enabled",
+                                            settings.filters().gaussian().isEnabled().value());
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.gaussian."
+                                                                            "sigma",
+                                            settings.filters().gaussian().sigma().value());
 
   camera_info_serial_number_service_ = this->create_service<zivid_interfaces::srv::CameraInfoSerialNumber>(
       "camera_info/serial_number",
@@ -443,8 +514,4 @@ sensor_msgs::msg::CameraInfo::ConstSharedPtr ZividCamera::makeCameraInfo(const s
 }  // namespace zivid_camera
 
 #include "rclcpp_components/register_node_macro.hpp"
-
-// Register the component with class_loader.
-// This acts as a sort of entry point, allowing the component to be discoverable when its library
-// is being loaded into a running process.
 RCLCPP_COMPONENTS_REGISTER_NODE(zivid_camera::ZividCamera)
