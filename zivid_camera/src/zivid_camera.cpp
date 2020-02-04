@@ -5,6 +5,7 @@
 #include <chrono>
 #include <memory>
 #include <sstream>
+#include <regex>
 
 #include <zivid_camera/zivid_camera.h>
 #include <zivid_camera/settings_generator.h>
@@ -58,6 +59,16 @@ std::string toString(zivid_camera::CameraStatus camera_status)
   return "N/A";
 }
 
+static bool endsWith(const std::string& str, const std::string& suffix)
+{
+  return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
+}
+
+static bool startsWith(const std::string& str, const std::string& prefix)
+{
+  return str.size() >= prefix.size() && 0 == str.compare(0, prefix.size(), prefix);
+}
+
 }  // namespace
 
 namespace zivid_camera
@@ -88,56 +99,6 @@ ZividCamera::ZividCamera(const rclcpp::NodeOptions& options) : rclcpp_lifecycle:
     }
     RCLCPP_INFO(parameter_server_node_->get_logger(), "service not available, waiting again...");
   }
-
-  auto on_parameter_event_callback = [this](const rcl_interfaces::msg::ParameterEvent::SharedPtr event) -> void {
-    for (auto& changed_parameter : event->changed_parameters)
-    {
-      auto settings = camera_.settings();
-      if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.blue_balance")
-      {
-        double value = changed_parameter.value.double_value;
-        settings.set(Zivid::Settings::BlueBalance(value));
-        camera_.setSettings(settings);
-        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.red_balance")
-      {
-        double value = changed_parameter.value.double_value;
-        settings.set(Zivid::Settings::RedBalance(value));
-        camera_.setSettings(settings);
-        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.contrast.enabled")
-      {
-        bool value = changed_parameter.value.bool_value;
-        settings.set(Zivid::Settings::Filters::Contrast::Enabled(value));
-        camera_.setSettings(settings);
-        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.contrast.threshold")
-      {
-        double value = changed_parameter.value.double_value;
-        settings.set(Zivid::Settings::Filters::Contrast::Threshold(value));
-        camera_.setSettings(settings);
-        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.gaussian.enabled")
-      {
-        bool value = changed_parameter.value.bool_value;
-        settings.set(Zivid::Settings::Filters::Gaussian::Enabled(value));
-        camera_.setSettings(settings);
-        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.gaussian.sigma")
-      {
-        double value = changed_parameter.value.double_value;
-        settings.set(Zivid::Settings::Filters::Gaussian::Sigma(value));
-        camera_.setSettings(settings);
-        RCLCPP_INFO_STREAM(this->get_parameter_server_node()->get_logger(), camera_.settings());
-      }
-    }
-  };
-  parameter_event_subscriber_ = parameters_client_->on_parameter_event(on_parameter_event_callback);
 
   this->declare_parameter<std::string>("zivid.camera.serial_number", serial_number_);
   this->declare_parameter<int>("zivid.camera.num_capture_frames", num_capture_frames_);
@@ -207,22 +168,173 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
     }
   }
 
+  auto on_parameter_event_callback_enabled =
+      [this](const rcl_interfaces::msg::ParameterEvent::SharedPtr event) -> void {
+    for (auto& changed_parameter : event->changed_parameters)
+    {
+      if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.blue_balance")
+      {
+        double value = changed_parameter.value.double_value;
+        for (auto& settings : hdr_settings_)
+        {
+          settings.set(Zivid::Settings::BlueBalance(value));
+        }
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.red_balance")
+      {
+        double value = changed_parameter.value.double_value;
+        for (auto& settings : hdr_settings_)
+        {
+          settings.set(Zivid::Settings::RedBalance(value));
+        }
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.contrast.enabled")
+      {
+        bool value = changed_parameter.value.bool_value;
+        for (auto& settings : hdr_settings_)
+        {
+          settings.set(Zivid::Settings::Filters::Contrast::Enabled(value));
+        }
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.contrast.threshold")
+      {
+        double value = changed_parameter.value.double_value;
+        for (auto& settings : hdr_settings_)
+        {
+          settings.set(Zivid::Settings::Filters::Contrast::Threshold(value));
+        }
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.gaussian.enabled")
+      {
+        bool value = changed_parameter.value.bool_value;
+        for (auto& settings : hdr_settings_)
+        {
+          settings.set(Zivid::Settings::Filters::Gaussian::Enabled(value));
+        }
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.outlier.enabled")
+      {
+        bool value = changed_parameter.value.bool_value;
+        for (auto& settings : hdr_settings_)
+        {
+          settings.set(Zivid::Settings::Filters::Outlier::Enabled(value));
+        }
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.outlier.threshold")
+      {
+        double value = changed_parameter.value.double_value;
+        for (auto& settings : hdr_settings_)
+        {
+          settings.set(Zivid::Settings::Filters::Outlier::Threshold(value));
+        }
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.reflection.enabled")
+      {
+        bool value = changed_parameter.value.bool_value;
+        for (auto& settings : hdr_settings_)
+        {
+          settings.set(Zivid::Settings::Filters::Reflection::Enabled(value));
+        }
+      }
+      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.saturated.enabled")
+      {
+        bool value = changed_parameter.value.bool_value;
+        for (auto& settings : hdr_settings_)
+        {
+          settings.set(Zivid::Settings::Filters::Saturated::Enabled(value));
+        }
+      }
+      else
+      {
+        const std::string s = changed_parameter.name;
+        std::string prefix = std::string(this->get_name()) + ".capture.frame_";
+        if (startsWith(changed_parameter.name, prefix))
+        {
+          std::regex rgx(".*([0-9]+).*");
+          std::smatch match;
+          if (std::regex_search(s.begin(), s.end(), match, rgx))
+          {
+            int frame_num = std::stoi(match[1]);
+            if (endsWith(changed_parameter.name, "bidirectional"))
+            {
+              bool value = changed_parameter.value.bool_value;
+              hdr_settings_[frame_num].set(Zivid::Settings::Bidirectional(value));
+            }
+            else if (endsWith(changed_parameter.name, "brightness"))
+            {
+              bool value = changed_parameter.value.double_value;
+              hdr_settings_[frame_num].set(Zivid::Settings::Brightness(value));
+            }
+            else if (endsWith(changed_parameter.name, "exposure_time"))
+            {
+              auto value = std::chrono::microseconds(changed_parameter.value.integer_value);
+              hdr_settings_[frame_num].set(Zivid::Settings::ExposureTime{ value });
+            }
+            else if (endsWith(changed_parameter.name, "gain"))
+            {
+              auto value = changed_parameter.value.double_value;
+              hdr_settings_[frame_num].set(Zivid::Settings::Gain{ value });
+            }
+            else if (endsWith(changed_parameter.name, "iris"))
+            {
+              auto value = static_cast<size_t>(changed_parameter.value.integer_value);
+              hdr_settings_[frame_num].set(Zivid::Settings::Iris{ value });
+            }
+          }
+        }
+      }
+    }
+  };
+
+  parameter_event_subscriber_ = parameters_client_->on_parameter_event(on_parameter_event_callback_enabled);
+
   // Get current settings
   Zivid::Settings settings = camera_.settings();
   parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.blue_balance",
                                             settings.blueBalance().value());
   parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.red_balance",
                                             settings.redBalance().value());
-  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.contrast.enabled",
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.contrast."
+                                                                            "enabled",
                                             settings.filters().contrast().isEnabled().value());
   parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.contrast."
                                                                             "threshold",
                                             settings.filters().contrast().threshold().value());
-  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.gaussian.enabled",
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.gaussian."
+                                                                            "enabled",
                                             settings.filters().gaussian().isEnabled().value());
   parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.gaussian."
                                                                             "sigma",
                                             settings.filters().gaussian().sigma().value());
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.outlier."
+                                                                            "enabled",
+                                            settings.filters().outlier().isEnabled().value());
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.outlier."
+                                                                            "threshold",
+                                            settings.filters().outlier().threshold().value());
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.reflection."
+                                                                            "enabled",
+                                            settings.filters().reflection().isEnabled().value());
+  parameter_server_node_->declare_parameter(std::string(this->get_name()) + ".capture.general.filters.saturated."
+                                                                            "enabled",
+                                            settings.filters().saturated().isEnabled().value());
+
+  for (size_t i = 0; i < num_capture_frames_; ++i)
+  {
+    std::string name = this->get_name();
+    parameter_server_node_->declare_parameter(name + ".capture.frame_" + std::to_string(i) + ".enabled", true);
+    parameter_server_node_->declare_parameter(name + ".capture.frame_" + std::to_string(i) + ".bidirectional",
+                                              settings.bidirectional().value());
+    parameter_server_node_->declare_parameter(name + ".capture.frame_" + std::to_string(i) + ".brightness",
+                                              settings.brightness().value());
+    parameter_server_node_->declare_parameter(name + ".capture.frame_" + std::to_string(i) + ".exposure_time",
+                                              static_cast<int>(settings.exposureTime().value().count()));
+    parameter_server_node_->declare_parameter(name + ".capture.frame_" + std::to_string(i) + ".gain",
+                                              settings.gain().value());
+    parameter_server_node_->declare_parameter(name + ".capture.frame_" + std::to_string(i) + ".iris",
+                                              static_cast<int>(settings.iris().value()));
+    hdr_settings_.push_back(settings);
+  }
 
   camera_info_serial_number_service_ = this->create_service<zivid_interfaces::srv::CameraInfoSerialNumber>(
       "camera_info/serial_number",
@@ -232,7 +344,8 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
         (void)request_header;
         if (!enabled_)
         {
-          RCLCPP_WARN(this->get_logger(), "Trying to call the 'camera_info/serial_number' service, but the service is "
+          RCLCPP_WARN(this->get_logger(), "Trying to call the 'camera_info/serial_number' service, but the service "
+                                          "is "
                                           "not activated");
           return;
         }
@@ -265,7 +378,14 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
           RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture' service, but the service is not activated");
           return;
         }
-        publishFrame(camera_.capture());
+
+        const auto settings = hdr_settings_;
+        RCLCPP_INFO_STREAM(this->get_logger(), "Capturing using HDR with " << settings.size() << " frames.");
+        for (const auto& s : settings)
+        {
+          RCLCPP_INFO_STREAM(this->get_logger(), s);
+        }
+        publishFrame(Zivid::HDR::capture(camera_, hdr_settings_));
       });
 
   capture_2d_service_ = create_service<zivid_interfaces::srv::Capture2D>(
@@ -277,7 +397,8 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
 
         if (!enabled_)
         {
-          RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture_2d' service, but the service is not activated");
+          RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture_2d' service, but the service is not "
+                                          "activated");
           return;
         }
 
@@ -298,7 +419,8 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
 
         if (!enabled_)
         {
-          RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture_assistant/suggest_settings' service, but the "
+          RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture_assistant/suggest_settings' service, but "
+                                          "the "
                                           "service is not activated");
           return;
         }
@@ -393,7 +515,6 @@ sensor_msgs::msg::PointCloud2::UniquePtr ZividCamera::makePointCloud2(const std_
 
   msg->data = std::vector<uint8_t>(reinterpret_cast<const uint8_t*>(point_cloud.dataPtr()),
                                    reinterpret_cast<const uint8_t*>(point_cloud.dataPtr() + point_cloud.size()));
-
 #pragma omp parallel for
   for (std::size_t i = 0; i < point_cloud.size(); i++)
   {

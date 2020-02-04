@@ -117,13 +117,14 @@ private:
   Zivid::Application zivid_;
   Zivid::Camera camera_;
   Zivid::Settings base_settings_;
+  std::vector<Zivid::Settings> hdr_settings_;
 
-  std::string serial_number_{""};
-  int num_capture_frames_{10};
+  std::string serial_number_{ "" };
+  int num_capture_frames_{ 3 };
   bool file_camera_mode_{ false };
-  std::string frame_id_{"zivid_optical_frame"};
+  std::string frame_id_{ "zivid_optical_frame" };
 
-  bool enabled_{false};
+  bool enabled_{ false };
 };
 
 }  // namespace zivid_camera

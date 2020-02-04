@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.5)
 project(zivid_parameter_server)
 
 if(${CMAKE_VERSION} VERSION_LESS "3.8.0")
-  add_compile_options(-std=c++17)
+  add_compile_options(-std=c++2a)
 else()
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
