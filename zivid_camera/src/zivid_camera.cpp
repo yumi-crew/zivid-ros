@@ -8,7 +8,6 @@
 #include <regex>
 
 #include <zivid_camera/zivid_camera.h>
-#include <zivid_camera/settings_generator.h>
 
 #include <Zivid/HDR.h>
 #include <Zivid/Firmware.h>
