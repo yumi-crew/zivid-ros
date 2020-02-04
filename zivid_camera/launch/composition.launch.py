@@ -19,11 +19,6 @@ def generate_launch_description():
                 node_plugin='zivid_camera::ZividCamera',
                 node_name='zivid_camera',
             ),
-            # ComposableNode(
-            #     package='zivid_parameter_server',
-            #     node_plugin='zivid_parameter_server::ZividParameterServer',
-            #     node_name='zivid_parameter_server',
-            # ),
         ],
         output='screen',
     )
