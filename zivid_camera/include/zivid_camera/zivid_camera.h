@@ -4,8 +4,14 @@
 
 #pragma once
 
-#include "rclcpp/rclcpp.hpp"
-#include "rclcpp_lifecycle/lifecycle_node.hpp"
+#include <Zivid/Application.h>
+#include <Zivid/Camera.h>
+#include <Zivid/Image.h>
+#include <Zivid/Settings.h>
+#include <Zivid/Settings2D.h>
+
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp_lifecycle/lifecycle_node.hpp>
 
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -14,8 +20,6 @@
 
 #include <image_transport/image_transport.h>
 
-#include <zivid_camera/visibility_control.h>
-
 #include <zivid_interfaces/srv/camera_info_model_name.hpp>
 #include <zivid_interfaces/srv/camera_info_serial_number.hpp>
 #include <zivid_interfaces/srv/capture.hpp>
@@ -23,11 +27,9 @@
 #include <zivid_interfaces/srv/capture_assistant_suggest_settings.hpp>
 #include <zivid_interfaces/srv/is_connected.hpp>
 
-#include <Zivid/Application.h>
-#include <Zivid/Camera.h>
-#include <Zivid/Image.h>
-#include <Zivid/Settings.h>
-#include <Zivid/Settings2D.h>
+#include <zivid_conversions/zivid_conversions.hpp>
+
+#include <zivid_camera/visibility_control.h>
 
 namespace Zivid
 {
@@ -80,20 +82,6 @@ private:
   void publishFrame(Zivid::Frame&& frame);
 
   std_msgs::msg::Header makeHeader();
-
-  sensor_msgs::msg::PointCloud2::UniquePtr makePointCloud2(const std_msgs::msg::Header& header,
-                                                           const Zivid::PointCloud& point_cloud);
-
-  sensor_msgs::msg::Image::ConstSharedPtr makeColorImage(const std_msgs::msg::Header& header,
-                                                         const Zivid::PointCloud& point_cloud);
-  sensor_msgs::msg::Image::ConstSharedPtr makeColorImage(const std_msgs::msg::Header& header,
-                                                         const Zivid::Image<Zivid::RGBA8>& image);
-  sensor_msgs::msg::Image::ConstSharedPtr makeDepthImage(const std_msgs::msg::Header& header,
-                                                         const Zivid::PointCloud& point_cloud);
-
-  sensor_msgs::msg::CameraInfo::ConstSharedPtr makeCameraInfo(const std_msgs::msg::Header& header, std::size_t width,
-                                                              std::size_t height,
-                                                              const Zivid::CameraIntrinsics& intrinsics);
 
   CameraStatus camera_status_;
 
