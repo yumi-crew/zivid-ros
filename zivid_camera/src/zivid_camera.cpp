@@ -17,6 +17,7 @@
 #include <Zivid/CaptureAssistant.h>
 
 using namespace std::chrono_literals;
+using namespace std::placeholders;
 
 namespace
 {
@@ -143,125 +144,8 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
     }
   }
 
-  auto on_parameter_event_callback_enabled =
-      [this](const rcl_interfaces::msg::ParameterEvent::SharedPtr event) -> void {
-    for (auto& changed_parameter : event->changed_parameters)
-    {
-      if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.blue_balance")
-      {
-        double value = changed_parameter.value.double_value;
-        for (auto& settings : hdr_settings_)
-        {
-          settings.set(Zivid::Settings::BlueBalance(value));
-        }
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.red_balance")
-      {
-        double value = changed_parameter.value.double_value;
-        for (auto& settings : hdr_settings_)
-        {
-          settings.set(Zivid::Settings::RedBalance(value));
-        }
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.contrast.enabled")
-      {
-        bool value = changed_parameter.value.bool_value;
-        for (auto& settings : hdr_settings_)
-        {
-          settings.set(Zivid::Settings::Filters::Contrast::Enabled(value));
-        }
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.contrast.threshold")
-      {
-        double value = changed_parameter.value.double_value;
-        for (auto& settings : hdr_settings_)
-        {
-          settings.set(Zivid::Settings::Filters::Contrast::Threshold(value));
-        }
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.gaussian.enabled")
-      {
-        bool value = changed_parameter.value.bool_value;
-        for (auto& settings : hdr_settings_)
-        {
-          settings.set(Zivid::Settings::Filters::Gaussian::Enabled(value));
-        }
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.outlier.enabled")
-      {
-        bool value = changed_parameter.value.bool_value;
-        for (auto& settings : hdr_settings_)
-        {
-          settings.set(Zivid::Settings::Filters::Outlier::Enabled(value));
-        }
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.outlier.threshold")
-      {
-        double value = changed_parameter.value.double_value;
-        for (auto& settings : hdr_settings_)
-        {
-          settings.set(Zivid::Settings::Filters::Outlier::Threshold(value));
-        }
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.reflection.enabled")
-      {
-        bool value = changed_parameter.value.bool_value;
-        for (auto& settings : hdr_settings_)
-        {
-          settings.set(Zivid::Settings::Filters::Reflection::Enabled(value));
-        }
-      }
-      else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.saturated.enabled")
-      {
-        bool value = changed_parameter.value.bool_value;
-        for (auto& settings : hdr_settings_)
-        {
-          settings.set(Zivid::Settings::Filters::Saturated::Enabled(value));
-        }
-      }
-      else
-      {
-        const std::string s = changed_parameter.name;
-        std::string prefix = std::string(this->get_name()) + ".capture.frame_";
-        if (startsWith(changed_parameter.name, prefix))
-        {
-          std::regex rgx(".*([0-9]+).*");
-          std::smatch match;
-          if (std::regex_search(s.begin(), s.end(), match, rgx))
-          {
-            int frame_num = std::stoi(match[1]);
-            if (endsWith(changed_parameter.name, "bidirectional"))
-            {
-              bool value = changed_parameter.value.bool_value;
-              hdr_settings_[frame_num].set(Zivid::Settings::Bidirectional(value));
-            }
-            else if (endsWith(changed_parameter.name, "brightness"))
-            {
-              bool value = changed_parameter.value.double_value;
-              hdr_settings_[frame_num].set(Zivid::Settings::Brightness(value));
-            }
-            else if (endsWith(changed_parameter.name, "exposure_time"))
-            {
-              auto value = std::chrono::microseconds(changed_parameter.value.integer_value);
-              hdr_settings_[frame_num].set(Zivid::Settings::ExposureTime{ value });
-            }
-            else if (endsWith(changed_parameter.name, "gain"))
-            {
-              auto value = changed_parameter.value.double_value;
-              hdr_settings_[frame_num].set(Zivid::Settings::Gain{ value });
-            }
-            else if (endsWith(changed_parameter.name, "iris"))
-            {
-              auto value = static_cast<size_t>(changed_parameter.value.integer_value);
-              hdr_settings_[frame_num].set(Zivid::Settings::Iris{ value });
-            }
-          }
-        }
-      }
-    }
-  };
-
-  parameter_event_subscriber_ = parameters_client_->on_parameter_event(on_parameter_event_callback_enabled);
+  parameter_event_subscriber_ =
+      parameters_client_->on_parameter_event(std::bind(&ZividCamera::parameterEventHandler, this, _1));
 
   // Get current settings
   Zivid::Settings settings = camera_.settings();
@@ -312,99 +196,25 @@ ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
   }
 
   camera_info_serial_number_service_ = this->create_service<zivid_interfaces::srv::CameraInfoSerialNumber>(
-      "camera_info/serial_number",
-      [this](const std::shared_ptr<rmw_request_id_t> request_header,
-             const std::shared_ptr<zivid_interfaces::srv::CameraInfoSerialNumber::Request> request,
-             std::shared_ptr<zivid_interfaces::srv::CameraInfoSerialNumber::Response> response) -> void {
-        (void)request_header;
-        if (!enabled_)
-        {
-          RCLCPP_WARN(this->get_logger(), "Trying to call the 'camera_info/serial_number' service, but the service "
-                                          "is not activated");
-          return;
-        }
-        response->serial_number = camera_.serialNumber().toString();
-      });
+      "camera_info/serial_number", std::bind(&ZividCamera::cameraInfoSerialNumberServiceHandler, this, _1, _2, _3));
 
   camera_info_model_name_service_ = this->create_service<zivid_interfaces::srv::CameraInfoModelName>(
-      "camera_info/model_name",
-      [this](const std::shared_ptr<rmw_request_id_t> request_header,
-             const std::shared_ptr<zivid_interfaces::srv::CameraInfoModelName::Request> request,
-             std::shared_ptr<zivid_interfaces::srv::CameraInfoModelName::Response> response) -> void {
-        (void)request_header;
-        if (!enabled_)
-        {
-          RCLCPP_WARN(this->get_logger(), "Trying to call the 'camera_model/model_name' service, but the service is "
-                                          "not activated");
-          return;
-        }
-        response->model_name = camera_.modelName();
-      });
+      "camera_info/model_name", std::bind(&ZividCamera::cameraInfoModelNameServiceHandler, this, _1, _2, _3));
 
   capture_service_ = create_service<zivid_interfaces::srv::Capture>(
-      "capture",
-      [this](const std::shared_ptr<rmw_request_id_t> request_header,
-             const std::shared_ptr<zivid_interfaces::srv::Capture::Request> request,
-             std::shared_ptr<zivid_interfaces::srv::Capture::Response> response) -> void {
-        (void)request_header;
-        if (!enabled_)
-        {
-          RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture' service, but the service is not activated");
-          return;
-        }
-
-        const auto settings = hdr_settings_;
-        RCLCPP_INFO_STREAM(this->get_logger(), "Capturing using HDR with " << settings.size() << " frames.");
-        for (const auto& s : settings)
-        {
-          RCLCPP_INFO_STREAM(this->get_logger(), s);
-        }
-        publishFrame(Zivid::HDR::capture(camera_, hdr_settings_));
-      });
+      "capture", std::bind(&ZividCamera::captureServiceHandler, this, _1, _2, _3));
 
   capture_2d_service_ = create_service<zivid_interfaces::srv::Capture2D>(
-      "capture_2d",
-      [this](const std::shared_ptr<rmw_request_id_t> request_header,
-             const std::shared_ptr<zivid_interfaces::srv::Capture2D::Request> request,
-             std::shared_ptr<zivid_interfaces::srv::Capture2D::Response> response) -> void {
-        (void)request_header;
-
-        if (!enabled_)
-        {
-          RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture_2d' service, but the service is not "
-                                          "activated");
-          return;
-        }
-
-        Zivid::Settings2D settings2D;
-        auto frame2D = camera_.capture2D(settings2D);
-        const auto header = makeHeader();
-        auto image = frame2D.image<Zivid::RGBA8>();
-        const auto camera_info =
-            zivid_conversions::makeCameraInfo(header, image.width(), image.height(), camera_.intrinsics());
-        color_image_publisher_.publish(zivid_conversions::makeColorImage(header, image), camera_info);
-      });
+      "capture_2d", std::bind(&ZividCamera::capture2DServiceHandler, this, _1, _2, _3));
 
   capture_assistant_suggest_settings_service_ = create_service<zivid_interfaces::srv::CaptureAssistantSuggestSettings>(
       "capture_assistant/suggest_settings",
-      [this](const std::shared_ptr<rmw_request_id_t> request_header,
-             const std::shared_ptr<zivid_interfaces::srv::CaptureAssistantSuggestSettings::Request> request,
-             std::shared_ptr<zivid_interfaces::srv::CaptureAssistantSuggestSettings::Response> response) -> void {
-        (void)request_header;
+      std::bind(&ZividCamera::captureAssistantSuggestSettingsServiceHandler, this, _1, _2, _3));
 
-        if (!enabled_)
-        {
-          RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture_assistant/suggest_settings' service, but "
-                                          "the service is not activated");
-          return;
-        }
-      });
-
-  auto qos = rclcpp::SystemDefaultsQoS();
-
-  color_image_publisher_ = image_transport::create_camera_publisher(image_transport_node_.get(), "color/image_color");
+  color_image_publisher_ = image_transport::create_camera_publisher(image_transport_node_.get(), "color/"
+                                                                                                 "image_color");
   depth_image_publisher_ = image_transport::create_camera_publisher(image_transport_node_.get(), "depth/image_raw");
-
+  auto qos = rclcpp::SystemDefaultsQoS();
   points_publisher_ = create_publisher<sensor_msgs::msg::PointCloud2>("points", qos);
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
@@ -467,8 +277,214 @@ void ZividCamera::publishFrame(Zivid::Frame&& frame)
 {
   const auto header = makeHeader();
   const auto point_cloud = frame.getPointCloud();
-
   points_publisher_->publish(std::move(zivid_conversions::makePointCloud2(header, point_cloud)));
+}
+
+void ZividCamera::cameraInfoModelNameServiceHandler(
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<zivid_interfaces::srv::CameraInfoModelName::Request> request,
+    std::shared_ptr<zivid_interfaces::srv::CameraInfoModelName::Response> response)
+{
+  (void)request_header;
+  if (!enabled_)
+  {
+    RCLCPP_WARN(this->get_logger(), "Trying to call the 'camera_model/model_name' service, but the service "
+                                    "is "
+                                    "not activated");
+    return;
+  }
+  response->model_name = camera_.modelName();
+}
+
+void ZividCamera::cameraInfoSerialNumberServiceHandler(
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<zivid_interfaces::srv::CameraInfoSerialNumber::Request> request,
+    std::shared_ptr<zivid_interfaces::srv::CameraInfoSerialNumber::Response> response)
+{
+  (void)request_header;
+  if (!enabled_)
+  {
+    RCLCPP_WARN(this->get_logger(), "Trying to call the 'camera_info/serial_number' service, but the service "
+                                    "is not activated");
+    return;
+  }
+  response->serial_number = camera_.serialNumber().toString();
+}
+
+void ZividCamera::captureServiceHandler(const std::shared_ptr<rmw_request_id_t> request_header,
+                                        const std::shared_ptr<zivid_interfaces::srv::Capture::Request> request,
+                                        std::shared_ptr<zivid_interfaces::srv::Capture::Response> response)
+{
+  (void)request_header;
+  if (!enabled_)
+  {
+    RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture' service, but the service is not activated");
+    return;
+  }
+
+  const auto settings = hdr_settings_;
+  RCLCPP_INFO_STREAM(this->get_logger(), "Capturing using HDR with " << settings.size() << " frames.");
+  for (const auto& s : settings)
+  {
+    RCLCPP_INFO_STREAM(this->get_logger(), s);
+  }
+  publishFrame(Zivid::HDR::capture(camera_, hdr_settings_));
+}
+
+void ZividCamera::capture2DServiceHandler(const std::shared_ptr<rmw_request_id_t> request_header,
+                                          const std::shared_ptr<zivid_interfaces::srv::Capture2D::Request> request,
+                                          std::shared_ptr<zivid_interfaces::srv::Capture2D::Response> response)
+{
+  (void)request_header;
+
+  if (!enabled_)
+  {
+    RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture_2d' service, but the service is not "
+                                    "activated");
+    return;
+  }
+
+  Zivid::Settings2D settings2D;
+  auto frame2D = camera_.capture2D(settings2D);
+  const auto header = makeHeader();
+  auto image = frame2D.image<Zivid::RGBA8>();
+  const auto camera_info =
+      zivid_conversions::makeCameraInfo(header, image.width(), image.height(), camera_.intrinsics());
+  color_image_publisher_.publish(zivid_conversions::makeColorImage(header, image), camera_info);
+}
+
+void ZividCamera::captureAssistantSuggestSettingsServiceHandler(
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<zivid_interfaces::srv::CaptureAssistantSuggestSettings::Request> request,
+    std::shared_ptr<zivid_interfaces::srv::CaptureAssistantSuggestSettings::Response> response)
+{
+  (void)request_header;
+
+  if (!enabled_)
+  {
+    RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture_assistant/suggest_settings' service, "
+                                    "but "
+                                    "the service is not activated");
+    return;
+  }
+}
+
+void ZividCamera::parameterEventHandler(const rcl_interfaces::msg::ParameterEvent::SharedPtr event)
+{
+  for (auto& changed_parameter : event->changed_parameters)
+  {
+    if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.blue_balance")
+    {
+      double value = changed_parameter.value.double_value;
+      for (auto& settings : hdr_settings_)
+      {
+        settings.set(Zivid::Settings::BlueBalance(value));
+      }
+    }
+    else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.red_balance")
+    {
+      double value = changed_parameter.value.double_value;
+      for (auto& settings : hdr_settings_)
+      {
+        settings.set(Zivid::Settings::RedBalance(value));
+      }
+    }
+    else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.contrast.enabled")
+    {
+      bool value = changed_parameter.value.bool_value;
+      for (auto& settings : hdr_settings_)
+      {
+        settings.set(Zivid::Settings::Filters::Contrast::Enabled(value));
+      }
+    }
+    else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.contrast.threshold")
+    {
+      double value = changed_parameter.value.double_value;
+      for (auto& settings : hdr_settings_)
+      {
+        settings.set(Zivid::Settings::Filters::Contrast::Threshold(value));
+      }
+    }
+    else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.gaussian.enabled")
+    {
+      bool value = changed_parameter.value.bool_value;
+      for (auto& settings : hdr_settings_)
+      {
+        settings.set(Zivid::Settings::Filters::Gaussian::Enabled(value));
+      }
+    }
+    else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.outlier.enabled")
+    {
+      bool value = changed_parameter.value.bool_value;
+      for (auto& settings : hdr_settings_)
+      {
+        settings.set(Zivid::Settings::Filters::Outlier::Enabled(value));
+      }
+    }
+    else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.outlier.threshold")
+    {
+      double value = changed_parameter.value.double_value;
+      for (auto& settings : hdr_settings_)
+      {
+        settings.set(Zivid::Settings::Filters::Outlier::Threshold(value));
+      }
+    }
+    else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.reflection.enabled")
+    {
+      bool value = changed_parameter.value.bool_value;
+      for (auto& settings : hdr_settings_)
+      {
+        settings.set(Zivid::Settings::Filters::Reflection::Enabled(value));
+      }
+    }
+    else if (changed_parameter.name == std::string(this->get_name()) + ".capture.general.filters.saturated.enabled")
+    {
+      bool value = changed_parameter.value.bool_value;
+      for (auto& settings : hdr_settings_)
+      {
+        settings.set(Zivid::Settings::Filters::Saturated::Enabled(value));
+      }
+    }
+    else
+    {
+      const std::string s = changed_parameter.name;
+      std::string prefix = std::string(this->get_name()) + ".capture.frame_";
+      if (startsWith(changed_parameter.name, prefix))
+      {
+        std::regex rgx(".*([0-9]+).*");
+        std::smatch match;
+        if (std::regex_search(s.begin(), s.end(), match, rgx))
+        {
+          int frame_num = std::stoi(match[1]);
+          if (endsWith(changed_parameter.name, "bidirectional"))
+          {
+            bool value = changed_parameter.value.bool_value;
+            hdr_settings_[frame_num].set(Zivid::Settings::Bidirectional(value));
+          }
+          else if (endsWith(changed_parameter.name, "brightness"))
+          {
+            bool value = changed_parameter.value.double_value;
+            hdr_settings_[frame_num].set(Zivid::Settings::Brightness(value));
+          }
+          else if (endsWith(changed_parameter.name, "exposure_time"))
+          {
+            auto value = std::chrono::microseconds(changed_parameter.value.integer_value);
+            hdr_settings_[frame_num].set(Zivid::Settings::ExposureTime{ value });
+          }
+          else if (endsWith(changed_parameter.name, "gain"))
+          {
+            auto value = changed_parameter.value.double_value;
+            hdr_settings_[frame_num].set(Zivid::Settings::Gain{ value });
+          }
+          else if (endsWith(changed_parameter.name, "iris"))
+          {
+            auto value = static_cast<size_t>(changed_parameter.value.integer_value);
+            hdr_settings_[frame_num].set(Zivid::Settings::Iris{ value });
+          }
+        }
+      }
+    }
+  }
 }
 
 }  // namespace zivid_camera

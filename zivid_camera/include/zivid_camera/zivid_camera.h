@@ -93,6 +93,29 @@ private:
       capture_assistant_suggest_settings_service_;
   rclcpp::Service<zivid_interfaces::srv::IsConnected>::SharedPtr is_connected_service_;
 
+  void
+  cameraInfoModelNameServiceHandler(const std::shared_ptr<rmw_request_id_t> request_header,
+                                    const std::shared_ptr<zivid_interfaces::srv::CameraInfoModelName::Request> request,
+                                    std::shared_ptr<zivid_interfaces::srv::CameraInfoModelName::Response> response);
+
+  void cameraInfoSerialNumberServiceHandler(
+      const std::shared_ptr<rmw_request_id_t> request_header,
+      const std::shared_ptr<zivid_interfaces::srv::CameraInfoSerialNumber::Request> request,
+      std::shared_ptr<zivid_interfaces::srv::CameraInfoSerialNumber::Response> response);
+
+  void captureServiceHandler(const std::shared_ptr<rmw_request_id_t> request_header,
+                             const std::shared_ptr<zivid_interfaces::srv::Capture::Request> request,
+                             std::shared_ptr<zivid_interfaces::srv::Capture::Response> response);
+
+  void capture2DServiceHandler(const std::shared_ptr<rmw_request_id_t> request_header,
+                               const std::shared_ptr<zivid_interfaces::srv::Capture2D::Request> request,
+                               std::shared_ptr<zivid_interfaces::srv::Capture2D::Response> response);
+
+  void captureAssistantSuggestSettingsServiceHandler(
+      const std::shared_ptr<rmw_request_id_t> request_header,
+      const std::shared_ptr<zivid_interfaces::srv::CaptureAssistantSuggestSettings::Request> request,
+      std::shared_ptr<zivid_interfaces::srv::CaptureAssistantSuggestSettings::Response> response);
+
   rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr points_publisher_;
   image_transport::CameraPublisher color_image_publisher_;
   image_transport::CameraPublisher depth_image_publisher_;
@@ -101,6 +124,7 @@ private:
   rclcpp::Node::SharedPtr parameter_server_node_;
   rclcpp::SyncParametersClient::SharedPtr parameters_client_;
   rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr parameter_event_subscriber_;
+  void parameterEventHandler(const rcl_interfaces::msg::ParameterEvent::SharedPtr event);
 
   Zivid::Application zivid_;
   Zivid::Camera camera_;
