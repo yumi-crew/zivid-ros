@@ -128,6 +128,11 @@ private:
   rclcpp::SyncParametersClient::SharedPtr parameters_client_;
   rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr parameter_event_subscriber_;
   rcl_interfaces::msg::SetParametersResult parameterEventHandler(std::vector<rclcpp::Parameter> parameters);
+  template <rclcpp::ParameterType ParameterType, typename ZividSettingsType>
+  rcl_interfaces::msg::SetParametersResult setParameter(const rclcpp::Parameter& parameter,
+                                                        std::vector<Zivid::Settings>& settings);
+  template <rclcpp::ParameterType ParameterType, typename ZividSettingsType>
+  rcl_interfaces::msg::SetParametersResult setParameter(const rclcpp::Parameter& parameter, Zivid::Settings& settings);
   std::mutex parameter_mutex_;
 
   Zivid::Application zivid_;
