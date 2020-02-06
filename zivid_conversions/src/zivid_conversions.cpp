@@ -1,3 +1,7 @@
+// Copyright (c) 2020 Norwegian University of Science and Technology
+// Copyright (c) 2019, Zivid AS
+// Use of this source code is governed by the BSD 3-Clause license, see LICENSE
+
 #include "zivid_conversions/zivid_conversions.hpp"
 
 namespace zivid_conversions

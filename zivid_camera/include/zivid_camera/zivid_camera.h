@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <mutex>
+
 #include <Zivid/Application.h>
 #include <Zivid/Camera.h>
 #include <Zivid/Image.h>
@@ -122,9 +124,11 @@ private:
   rclcpp::Node::SharedPtr image_transport_node_;
 
   rclcpp::Node::SharedPtr parameter_server_node_;
+  rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr on_set_parameters_callback_handler_;
   rclcpp::SyncParametersClient::SharedPtr parameters_client_;
   rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr parameter_event_subscriber_;
-  void parameterEventHandler(const rcl_interfaces::msg::ParameterEvent::SharedPtr event);
+  rcl_interfaces::msg::SetParametersResult parameterEventHandler(std::vector<rclcpp::Parameter> parameters);
+  std::mutex parameter_mutex_;
 
   Zivid::Application zivid_;
   Zivid::Camera camera_;

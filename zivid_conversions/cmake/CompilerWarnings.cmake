@@ -1,3 +1,7 @@
+# Copyright (c) 2020 Norwegian University of Science and Technology
+# Copyright (c) 2019, Zivid AS
+# Use of this source code is governed by the BSD 3-Clause license, see LICENSE
+
 function(set_target_warning_compile_options TARGET)
 
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
