@@ -62,19 +62,6 @@ ZividCamera::ZividCamera(const rclcpp::NodeOptions& options) : rclcpp_lifecycle:
                              "from scratch.");
   }
 
-  image_transport_node_ = rclcpp::Node::make_shared("image_transport_node");
-  parameter_server_node_ = rclcpp::Node::make_shared("zivid_parameter_server");
-  parameters_client_ = rclcpp::SyncParametersClient::make_shared(parameter_server_node_);
-
-  while (!parameters_client_->wait_for_service(1s))
-  {
-    if (!rclcpp::ok())
-    {
-      RCLCPP_ERROR(parameter_server_node_->get_logger(), "Interrupted while waiting for the service. Exiting.");
-      rclcpp::shutdown();
-    }
-    RCLCPP_INFO(parameter_server_node_->get_logger(), "service not available, waiting again...");
-  }
 
   this->declare_parameter<std::string>("zivid.camera.serial_number", serial_number_);
   this->declare_parameter<int>("zivid.camera.num_capture_frames", num_capture_frames_);
@@ -85,6 +72,10 @@ ZividCamera::ZividCamera(const rclcpp::NodeOptions& options) : rclcpp_lifecycle:
 rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 ZividCamera::on_configure(const rclcpp_lifecycle::State& state)
 {
+
+  image_transport_node_ = rclcpp::Node::make_shared("image_transport_node");
+  parameter_server_node_ = rclcpp::Node::make_shared("zivid_parameter_server");
+
   serial_number_ = this->get_parameter("zivid.camera.serial_number").as_string();
   num_capture_frames_ = this->get_parameter("zivid.camera.num_capture_frames").as_int();
   frame_id_ = this->get_parameter("zivid.camera.frame_id").as_string();
@@ -254,6 +245,9 @@ ZividCamera::on_deactivate(const rclcpp_lifecycle::State& state)
 rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
 ZividCamera::on_cleanup(const rclcpp_lifecycle::State& state)
 {
+  image_transport_node_.reset();
+  parameter_server_node_.reset();
+  
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
 
@@ -287,8 +281,7 @@ void ZividCamera::cameraInfoModelNameServiceHandler(
   if (!enabled_)
   {
     RCLCPP_WARN(this->get_logger(), "Trying to call the 'camera_model/model_name' service, but the service "
-                                    "is "
-                                    "not activated");
+                                    "is not activated");
     return;
   }
   response->model_name = camera_.modelName();
@@ -319,15 +312,8 @@ void ZividCamera::captureServiceHandler(const std::shared_ptr<rmw_request_id_t> 
     RCLCPP_WARN(this->get_logger(), "Trying to call the 'capture' service, but the service is not activated");
     return;
   }
-
   std::lock_guard<std::mutex> parameter_lock_guard{ parameter_mutex_ };
-
   const auto settings = hdr_settings_;
-  RCLCPP_INFO_STREAM(this->get_logger(), "Capturing using HDR with " << settings.size() << " frames.");
-  for (const auto& s : settings)
-  {
-    RCLCPP_INFO_STREAM(this->get_logger(), s);
-  }
   publishFrame(Zivid::HDR::capture(camera_, hdr_settings_));
 }
 
@@ -410,16 +396,7 @@ rcl_interfaces::msg::SetParametersResult ZividCamera::setParameter(const rclcpp:
     result.successful = true;
     return result;
   }
-  catch (const rclcpp::ParameterTypeException& e)
-  {
-    std::stringstream reason;
-    reason << "The parameter '" << parameter_name << "' could not be set: " << e.what();
-    RCLCPP_WARN_STREAM(parameter_server_node_->get_logger(), reason.str());
-    result.successful = false;
-    result.reason = reason.str();
-    return result;
-  }
-  catch (const std::out_of_range& e)
+  catch (const std::exception& e)
   {
     std::stringstream reason;
     reason << "The parameter '" << parameter_name << "' could not be set: " << e.what();
@@ -444,7 +421,6 @@ rcl_interfaces::msg::SetParametersResult ZividCamera::parameterEventHandler(std:
 
     if (changed_parameter_name == node_name + ".capture.general.blue_balance")
     {
-      RCLCPP_INFO_STREAM(this->get_logger(), "bluebalance");
       return setParameter<rclcpp::ParameterType::PARAMETER_DOUBLE, Zivid::Settings::BlueBalance>(changed_parameter,
                                                                                                  hdr_settings_);
     }

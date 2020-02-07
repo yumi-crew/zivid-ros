@@ -125,8 +125,6 @@ private:
 
   rclcpp::Node::SharedPtr parameter_server_node_;
   rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr on_set_parameters_callback_handler_;
-  rclcpp::SyncParametersClient::SharedPtr parameters_client_;
-  rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr parameter_event_subscriber_;
   rcl_interfaces::msg::SetParametersResult parameterEventHandler(std::vector<rclcpp::Parameter> parameters);
   template <rclcpp::ParameterType ParameterType, typename ZividSettingsType>
   rcl_interfaces::msg::SetParametersResult setParameter(const rclcpp::Parameter& parameter,
