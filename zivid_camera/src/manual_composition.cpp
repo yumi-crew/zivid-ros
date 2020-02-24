@@ -5,7 +5,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <zivid_camera/zivid_camera.h>
 
-int main(int argc, char * argv[])
+int main(int argc, char* argv[])
 {
   // Force flush of the stdout buffer.
   setvbuf(stdout, NULL, _IONBF, BUFSIZ);
